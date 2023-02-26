@@ -1,69 +1,123 @@
 class Dot{
-    constructor(x, y, charge){
-        this.charge = charge;
+    constructor(x, y, dotCharge){
+        this.rad = dotRadius;
+        this.charge = dotCharge;
         this.pos = new Vector(x, y);
         this.vel = new Vector(0, 0);
         this.acc = new Vector(0, 0);
+        this.forces = new Vector(0, 0);
         dots.push(this);
     }
+    
 
-    static getForce(d1, d2){
+    static getColorForce(d1, d2){
         let dist = d1.pos.subtract(d2.pos);
-        let force = 0;
-        if(dist.mag() != 0){
-            force = (d1.charge * d2.charge) / (dist.mag()**2);
+        if(dist.mag() > 0){
+            let forceMag = colorIntensity / (dist.multiply(1 / dotRadius).mag()**2);
+            let force = dist.unit().multiply(forceMag);
+            if(d1.charge == d2.charge){
+                d1.forces = d1.forces.add(force.multiply(maxColors - 1));
+                d2.forces = d2.forces.subtract(force.multiply(maxColors - 1));
+            } else{
+                d1.forces = d1.forces.subtract(force);
+                d2.forces = d2.forces.add(force);
+            }
         }
-        return dist.unit().multiply(force);
     }
 
-    bound(x1, y1, x2, y2){
-        if(this.pos.x <= x1){
-            this.pos.x += x1 - this.pos.x;
-        }
-        if(this.pos.x >= x2){
-            this.pos.x += x2 - this.pos.x;
-        }
-        if(this.pos.y <= y1){
-            this.pos.y += y1 - this.pos.y;
-        }
-        if(this.pos.y >= y2){
-            this.pos.y += y2 - this.pos.y;
-        }
+    static getForces(d1, d2){
+        
+        Dot.getColorForce(d1, d2);
     }
 
     static detectCollision(d1, d2){
-        if(2 * RADIUS >= d2.pos.subtract(d1.pos).mag()){
+        let dist = d1.pos.subtract(d2.pos);
+        if(d1.rad + d2.rad >= dist.mag()){
             return true;
-        } else{
-            return false;
         }
     }
 
-    static collisionResponse(d1, d2){
+    static collisionResolution(d1, d2){
         let dist = d1.pos.subtract(d2.pos);
-        let depth = 2 * RADIUS - dist.mag();
-        let response = dist.unit().multiply(depth / 2);
-        d1.pos = d1.pos.add(response);
-        d2.pos = d2.pos.add(response.multiply(-1));
+        let depth = d1.rad + d2.rad - dist.mag();
+        let resolution = dist.unit().multiply(depth / 2);
+        d1.pos = d1.pos.add(resolution);
+        d2.pos = d2.pos.add(resolution.multiply(-1));
+
+    }
+
+    static collisionResponse(d1, d2){
+        let velFinal = d1.vel.add(d2.vel).multiply(-1 / 2);
+        d1.vel = d1.vel.add(velFinal).multiply(frictionCoefficient);
+        d2.vel = d1.vel.subtract(velFinal).multiply(frictionCoefficient);
+    }
+
+    detectWall(){
+        if(this.pos.x < -2 * this.rad){
+            this.pos.x = -this.rad;
+            this.vel.x = -this.vel.x;
+        } else if(this.pos.x > canvas.clientWidth + 2 * this.rad){
+            this.pos.x = canvas.clientWidth + this.rad;
+            this.vel.x = -this.vel.x;
+        }
+        if(this.pos.y < -2 * this.rad){
+            this.pos.y = -this.rad;
+            this.vel.y = -this.vel.y;
+        } else if(this.pos.y > canvas.clientHeight + 2 * this.rad){
+            this.pos.y = canvas.clientHeight + this.rad;
+            this.vel.y = -this.vel.x;
+        }
+    }
+
+    getSVA(){
+        this.acc = this.forces;
+        this.forces = new Vector(0, 0);
+        this.vel = this.vel.add(this.acc);
+        this.acc = new Vector(0, 0);
+        this.pos = this.pos.add(this.vel);
+        
     }
 
     draw(){
         ctx.beginPath();
-        ctx.arc(this.pos.x, this.pos.y, RADIUS, 0, Math.PI*2);
-        if(this.charge > 0){
-            ctx.fillStyle = "#0055AA";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.rect(this.pos.x - 3 * RADIUS / 4, this.pos.y - RADIUS / 4, 3 * RADIUS / 2, RADIUS / 2);
-            ctx.rect(this.pos.x - RADIUS / 4, this.pos.y - 3 * RADIUS / 4, RADIUS / 2, 3 * RADIUS / 2);
-
-        } else{
-            ctx.fillStyle = "#AA0055";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.rect(this.pos.x - RADIUS / 2, this.pos.y - RADIUS / 4, RADIUS, RADIUS / 2);
+        ctx.arc(this.pos.x, this.pos.y, this.rad, 0, 2 * Math.PI);
+        switch(this.charge) {
+            case 0:
+              ctx.fillStyle = '#ff0000';
+              break;
+            case 1:
+                ctx.fillStyle = '#0000ff';
+                break;
+            case 2:
+                ctx.fillStyle = '#00ff00';
+                break;
+            case 3:
+                ctx.fillStyle = '#ffff00';
+                break;
+            case 4:
+                ctx.fillStyle = '#ff00ff';
+                break;
+            case 5:
+                ctx.fillStyle = '#00ffff';
+                break;
+            default:
+                ctx.fillStyle = 'ffffff';
         }
-        ctx.fillStyle = "#000000";
         ctx.fill();
+    }
+
+    static update(){
+        dots.forEach((d1, i) => {
+            for(var j = i + 1; j < dots.length; j++){
+                if(Dot.detectCollision(dots[i], dots[j])){
+                    Dot.collisionResolution(dots[i], dots[j]);
+                    Dot.collisionResponse(dots[i], dots[j]);
+                }
+                Dot.getForces(dots[i], dots[j]);
+            }
+            d1.detectWall();
+            d1.getSVA();
+            d1.draw();
+        });
     }
 }
